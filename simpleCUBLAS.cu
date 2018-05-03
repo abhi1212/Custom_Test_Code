@@ -217,10 +217,9 @@ int main(int argc, char **argv)
     float alpha = 1.0f;		
     float beta = 1.0f;
 
-    int n2 = N * N;		//Size of h_A. h_B, h_C
-
-    int rows=5;
-    int columns=2 
+    int rows=8;
+    int columns=3; 
+    int n2 = rows * columns;		//Size of h_A. h_B, h_C
 
 
 
@@ -357,7 +356,7 @@ int main(int argc, char **argv)
     /********************************************Kernel Call to Cublas GEMM*************************/
 
     /* Performs operation using cublas */
-    /*status = cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, N, N, N, &alpha, d_A, N, d_B, N, &beta, d_C, N);
+    status = cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, N, N, N, &alpha, d_A, N, d_B, N, &beta, d_C, N);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -365,7 +364,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    cudaDeviceSynchronize();*/
+    cudaDeviceSynchronize();
 
 
     /****************************************Kernel Call to Global Mem GEMM Transpose One ***************************/
@@ -417,14 +416,14 @@ int main(int argc, char **argv)
   /**************************************KERNEL Call to TRanspose*******************************************/
 
 
-	dim3 dimGrid(N/BLOCK_DIM+1, N/BLOCK_DIM+1, 1);
+	/*dim3 dimGrid(N/BLOCK_DIM+1, N/BLOCK_DIM+1, 1);
 	dim3 dimBlock(BLOCK_DIM, BLOCK_DIM, 1);
 
-	transpose<<< dimGrid, dimBlock >>>(d_C, d_A,N,N);
+	transpose<<< dimGrid, dimBlock >>>(d_C, d_A,columns,rows);
 
 
 
-	cudaThreadSynchronize();
+	cudaThreadSynchronize();*/
 
 
     /*************************************************Getting The results back*************************/
@@ -454,7 +453,7 @@ int main(int argc, char **argv)
    printf("The Input Matrix A is\n\n");
    for(i=0;i<(n2);i++)
 	{
-		if(count1==N){
+		if(count1==columns){
 			printf("\n");
 			count1=0;
 			}
@@ -466,7 +465,7 @@ int main(int argc, char **argv)
    printf("The Input Matrix B is\n");
    for(i=0;i<(n2);i++)
 	{
-		if(count2==N){
+		if(count2==columns){
 			printf("\n");
 			count2=0;
 			}
@@ -483,7 +482,7 @@ int main(int argc, char **argv)
    printf("The output elements are\n");
     for(i=0;i<(n2);i++)
 	{
-		if(count==N){
+		if(count==columns){
 			printf("\n");
 			count=0;
 			}
