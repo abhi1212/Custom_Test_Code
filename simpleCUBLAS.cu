@@ -20,7 +20,8 @@ Steps to Consider--
 4)It works only with square matrices.
 
 
-//Making it Rectangular
+//Making it Rectangular Done
+//Trying without initializing lda,ldb,ldc
 
 
 
@@ -53,6 +54,8 @@ Steps to Consider--
 #define TILE_WIDTH 16
 const int TILE_DIM = 32;
 const int BLOCK_DIM = 16;
+
+#define IDX2C(i,j,ld) (((j)*(ld))+(i))
 
 
 __global__ void custom_sgemm(int TA, int TB, int M, int n, int K, float ALPHA, 
@@ -217,11 +220,20 @@ int main(int argc, char **argv)
     float alpha = 1.0f;		
     float beta = 1.0f;
 
-    int rows=8;
-    int columns=3; 
-    int n2 = rows * columns;		//Size of h_A. h_B, h_C
+    int m=5;
+    int k=3;
+    int n=2;
+ 
+    int size_a=m*k;
+    int size_b=k*n;
+    int size_c=(m*n);
+    //int n2 = rows * columns;		//Size of h_A. h_B, h_C
 
+    //Considering the case when it is non transpose
 
+    int lda=m;
+    int ldb=k;
+    int ldc=m;
 
     int i;
     float error_norm;
@@ -256,7 +268,7 @@ int main(int argc, char **argv)
 
 
     /* Allocate host memory for the matrices */
-    h_A = (float *)malloc(n2 * sizeof(h_A[0]));
+    h_A = (float *)malloc(size_a * sizeof(h_A[0]));
 
 
     if (h_A == 0)
@@ -265,7 +277,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    h_B = (float *)malloc(n2 * sizeof(h_B[0]));
+    h_B = (float *)malloc(size_b * sizeof(h_B[0]));
 
     if (h_B == 0)
     {
@@ -273,7 +285,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    h_C = (float *)malloc(n2 * sizeof(h_C[0]));
+    h_C = (float *)malloc(size_c * sizeof(h_C[0]));
 
     if (h_C == 0)
     {
@@ -284,19 +296,19 @@ int main(int argc, char **argv)
 
     
     /* Allocate device memory for the matrices */
-    if (cudaMalloc((void **)&d_A, n2 * sizeof(d_A[0])) != cudaSuccess)
+    if (cudaMalloc((void **)&d_A, size_a * sizeof(d_A[0])) != cudaSuccess)
     {
         fprintf(stderr, "!!!! device memory allocation error (allocate A)\n");
         return EXIT_FAILURE;
     }
 
-    if (cudaMalloc((void **)&d_B, n2 * sizeof(d_B[0])) != cudaSuccess)
+    if (cudaMalloc((void **)&d_B, size_b * sizeof(d_B[0])) != cudaSuccess)
     {
         fprintf(stderr, "!!!! device memory allocation error (allocate B)\n");
         return EXIT_FAILURE;
     }
 
-    if (cudaMalloc((void **)&d_C, n2 * sizeof(d_C[0])) != cudaSuccess)
+    if (cudaMalloc((void **)&d_C, size_c * sizeof(d_C[0])) != cudaSuccess)
     {
         fprintf(stderr, "!!!! device memory allocation error (allocate C)\n");
         return EXIT_FAILURE;
@@ -309,24 +321,33 @@ int main(int argc, char **argv)
 
 
 
-    /* Fill the matrices with test data */
-    for (i = 0; i < n2; i++)
+    /* Fill the matrices with test data */	//Allocation for A
+    for (i = 0; i < size_a; i++)
     {
-        h_A[i] = (float)i;			//rand() / (float)RAND_MAX;
-        h_B[i] = (float)i;			//rand() / (float)RAND_MAX;
-        h_C[i] = 0.0;			//rand() / (float)RAND_MAX;
+        h_A[i] = (float)i;
     }
-
  
 
-   
+    /* Fill the matrices with test data */	//Allocation for A
+    for (i = 0; i < size_b; i++)
+    {
+        h_B[i] = (float)i;
+    }
+ 
 
+    /* Fill the matrices with test data */	//Allocation for A
+    for (i = 0; i < size_c; i++)
+    {
+        h_C[i] = 0;
+    }
+ 
 
+  
 
     /**************************************Cuda Memcopies********************************/
 
      /* Initialize the device matrices with the host matrices */
-    status = cublasSetVector(n2, sizeof(h_A[0]), h_A, 1, d_A, 1);
+    status = cublasSetVector(size_a, sizeof(h_A[0]), h_A, 1, d_A, 1);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -334,7 +355,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    status = cublasSetVector(n2, sizeof(h_B[0]), h_B, 1, d_B, 1);
+    status = cublasSetVector(size_b, sizeof(h_B[0]), h_B, 1, d_B, 1);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -343,7 +364,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    status = cublasSetVector(n2, sizeof(h_C[0]), h_C, 1, d_C, 1);
+    status = cublasSetVector(size_c, sizeof(h_C[0]), h_C, 1, d_C, 1);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -356,7 +377,7 @@ int main(int argc, char **argv)
     /********************************************Kernel Call to Cublas GEMM*************************/
 
     /* Performs operation using cublas */
-    status = cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, N, N, N, &alpha, d_A, N, d_B, N, &beta, d_C, N);
+    status = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, d_A, lda, d_B, ldb, &beta, d_C, ldc);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -427,10 +448,10 @@ int main(int argc, char **argv)
 
 
     /*************************************************Getting The results back*************************/
-
+																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																				
 
     /* Read the result back */
-    status = cublasGetVector(n2, sizeof(h_C[0]), d_C, 1, h_C, 1);
+    status = cublasGetVector(size_c, sizeof(h_C[0]), d_C, 1, h_C, 1);
 
 
 
@@ -451,9 +472,9 @@ int main(int argc, char **argv)
    int count=0;
 
    printf("The Input Matrix A is\n\n");
-   for(i=0;i<(n2);i++)
+   for(i=0;i<(size_a);i++)
 	{
-		if(count1==columns){
+		if(count1==k){
 			printf("\n");
 			count1=0;
 			}
@@ -463,9 +484,9 @@ int main(int argc, char **argv)
    printf("\n\n");
 
    printf("The Input Matrix B is\n");
-   for(i=0;i<(n2);i++)
+   for(i=0;i<(size_b);i++)
 	{
-		if(count2==columns){
+		if(count2==n){
 			printf("\n");
 			count2=0;
 			}
@@ -480,9 +501,9 @@ int main(int argc, char **argv)
 
 
    printf("The output elements are\n");
-    for(i=0;i<(n2);i++)
+    for(i=0;i<(size_c);i++)
 	{
-		if(count==columns){
+		if(count==n){
 			printf("\n");
 			count=0;
 			}
