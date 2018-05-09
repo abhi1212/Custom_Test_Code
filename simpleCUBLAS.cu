@@ -203,6 +203,28 @@ __global__ void transpose(float *odata, float *idata, int width, int height)
 
 
 
+
+
+/**********************************************************GEMM********************************************/
+
+__global__ void gemm_kernel(float *a, float *b, float *c,float NI, float NK, float NJ)
+{
+	int j = blockIdx.x * blockDim.x + threadIdx.x;
+	int i = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if ((i < NI) && (j < NJ))
+	{	
+		c[i * NJ + j] *= BETA;
+		int k;
+		for(k=0; k < NK; k++)
+		{
+			c[i * NJ + j] += ALPHA * a[i * NK + k] * b[k * NJ +j];
+		}
+	}
+}
+
+
+
 /****************************************************  Main  **********************************************/
 
 
@@ -219,6 +241,7 @@ int main(int argc, char **argv)
     float *d_C = 0;		//Device Array C
     float alpha = 1.0f;		
     float beta = 1.0f;
+    int j=0;
 
     int m=5;
     int k=3;
@@ -322,25 +345,35 @@ int main(int argc, char **argv)
 
 
     /* Fill the matrices with test data */	//Allocation for A
-    for (i = 0; i < size_a; i++)
+    for (i = 0; i < m; i++)
     {
-        h_A[i] = (float)i;
+	 for(j = 0; j < k; j++)	
+	 {
+        	h_A[(i*k)+j] = (i*k)+j;		
+	 }
     }
  
 
     /* Fill the matrices with test data */	//Allocation for A
-    for (i = 0; i < size_b; i++)
+     for (i = 0; i < k; i++)
     {
-        h_B[i] = (float)i;
+	 for(j = 0; j < n; j++)	
+	 {
+        	h_B[(i*n)+j] = (i*n)+j;		
+	 }
     }
  
 
     /* Fill the matrices with test data */	//Allocation for A
-    for (i = 0; i < size_c; i++)
+    for (i = 0; i < m; i++)
     {
-        h_C[i] = 0;
+	 for(j = 0; j < n; j++)	
+	 {
+        	h_C[(i*n)+j] = (i*n)+j;		
+	 }
     }
  
+
 
   
 
@@ -354,6 +387,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "!!!! device access error (write A)\n");
         return EXIT_FAILURE;
     }
+
 
     status = cublasSetVector(size_b, sizeof(h_B[0]), h_B, 1, d_B, 1);
 
@@ -377,7 +411,7 @@ int main(int argc, char **argv)
     /********************************************Kernel Call to Cublas GEMM*************************/
 
     /* Performs operation using cublas */
-    status = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, d_A, lda, d_B, ldb, &beta, d_C, ldc);
+   /* status = cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, k, &alpha, d_A, lda, d_B, ldb, &beta, d_C, ldc);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -385,7 +419,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    cudaDeviceSynchronize();
+    cudaDeviceSynchronize();*/
 
 
     /****************************************Kernel Call to Global Mem GEMM Transpose One ***************************/
@@ -445,6 +479,24 @@ int main(int argc, char **argv)
 
 
 	cudaThreadSynchronize();*/
+
+
+
+
+   /***********************************GEMM Function Call***************************************************/
+
+        dim3 dimGrid(N/BLOCK_DIM+1, N/BLOCK_DIM+1, 1);
+	dim3 dimBlock(BLOCK_DIM, BLOCK_DIM, 1);
+
+	transpose<<< dimGrid, dimBlock >>>(d_C, d_A,columns,rows);
+
+
+
+	cudaThreadSynchronize();
+    
+
+
+
 
 
     /*************************************************Getting The results back*************************/
