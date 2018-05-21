@@ -23,6 +23,8 @@ Steps to Consider--
 //Making it Rectangular Done
 //Trying without initializing lda,ldb,ldc
 
+//Can be issues with Tranpose kernel Launches
+
 
 
 
@@ -207,10 +209,30 @@ __global__ void transpose(float *odata, float *idata, int width, int height)
 
 /**********************************************************GEMM********************************************/
 
-__global__ void gemm_kernel(float *a, float *b, float *c,int NI, int NK, int NJ,float ALPHA, float BETA)
+__global__ void gemm_kernel(float *a, float *b, float *c,int NI, int NK, int NJ,float ALPHA, float BETA)  
 {
 	int j = blockIdx.x * blockDim.x + threadIdx.x;
 	int i = blockIdx.y * blockDim.y + threadIdx.y;
+	int row=0;
+	int column=0;
+        int size_a=NI*NK;
+
+/*	if(i==0 && j==0) 			//For this condition Test- for device array data ordering
+	{
+                int count=0;
+		for(row=0;row<size_a;row++)
+		{
+			printf("%f ",a[row]);
+			count+=1;
+			if(count==NK)
+			{
+				printf("\n");
+				count=0;
+			}
+		}	
+		
+
+	}*/
 
 	if ((i < NI) && (j < NJ))
 	{	
@@ -234,19 +256,23 @@ int main(int argc, char **argv)
 {
     cublasStatus_t status;
     float *h_A;  		// Host Array A
+    float *h_A_T;		//Host Transpose Array
     float *h_B;			//Host Array  B
+    float *h_B_T;		//Host Array  B Transpose
     float *h_C;			//Host Array  C
     float *h_C_ref;		//Host Referrence Array
     float *d_A = 0;		//Device Array A
-    float *d_B = 0;		//Device Array B
+    float *d_A_T = 0;		//Transpose Device Array
+    float *d_B =  0;		//Device Array B
+    float *d_B_T= 0;		//Transpose Device array B
     float *d_C = 0;		//Device Array C
     float alpha = 1.0f;		
     float beta = 1.0f;
     int j=0;
 
     int m=5;
-    int k=3;
-    int n=2;
+    int k=2;
+    int n=4;
  
     int size_a=m*k;
     int size_b=k*n;
@@ -293,17 +319,18 @@ int main(int argc, char **argv)
 
     /* Allocate host memory for the matrices */
     h_A = (float *)malloc(size_a * sizeof(h_A[0]));
+    h_A_T = (float *)malloc(size_a * sizeof(h_A[0]));
 
-
-    if (h_A == 0)
+    if (h_A == 0 ||h_A_T == 0 )
     {
         fprintf(stderr, "!!!! host memory allocation error (A)\n");
         return EXIT_FAILURE;
     }
 
     h_B = (float *)malloc(size_b * sizeof(h_B[0]));
+    h_B_T = (float *)malloc(size_b * sizeof(h_B[0]));
 
-    if (h_B == 0)
+    if (h_B == 0 || h_B_T== 0)
     {
         fprintf(stderr, "!!!! host memory allocation error (B)\n");
         return EXIT_FAILURE;
@@ -326,11 +353,27 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+    if (cudaMalloc((void **)&d_A_T, size_a * sizeof(d_A[0])) != cudaSuccess)
+    {
+        fprintf(stderr, "!!!! device memory allocation error (allocate A)\n");
+        return EXIT_FAILURE;
+    }
+
+
     if (cudaMalloc((void **)&d_B, size_b * sizeof(d_B[0])) != cudaSuccess)
     {
         fprintf(stderr, "!!!! device memory allocation error (allocate B)\n");
         return EXIT_FAILURE;
     }
+
+    if (cudaMalloc((void **)&d_B_T, size_b * sizeof(d_B[0])) != cudaSuccess)
+    {
+        fprintf(stderr, "!!!! device memory allocation error (allocate B)\n");
+        return EXIT_FAILURE;
+    }
+
+
+
 
     if (cudaMalloc((void **)&d_C, size_c * sizeof(d_C[0])) != cudaSuccess)
     {
@@ -345,44 +388,47 @@ int main(int argc, char **argv)
 
 
 
-    /* Fill the matrices with test data */	//Initialization for A
-
-    for (j = 0; j < m; j++) 
-	{
-	        for (i = 0; i < k; i++) 
-		{
-        		h_A[IDX2C(i,j,k)] = (float)(i * (k-1) + j);	//(((j)*(ld))+(i))	
-	 	}
-    	}
- 
-
-    /* Fill the matrices with test data */	//Initialization for B
-     for (i = 0; i < k; i++)
+     /* Fill the matrices with test data */	//Allocation for A
+    for (i = 0; i < m; i++)
     {
-	 for(j = 0; j < n; j++)	
+	 for(j = 0; j < k; j++)	
 	 {
-        	h_B[IDX2C(j,i,n)] = (i*n)+j;		
+        	h_A[(i*k)+j] = (i*k)+j;	
+		h_A_T[(i*k)+j] = 0;
 	 }
     }
  
 
-    /* Fill the matrices with test data */	//Initialization for C
+    /* Fill the matrices with test data */	//Allocation for A
+     for (i = 0; i < k; i++)
+    {
+	 for(j = 0; j < n; j++)	
+	 {	
+        	h_B[(i*n)+j] = (i*n)+j;	
+		h_B_T[(i*n)+j] = 0;		
+	 }
+    }
+ 
+
+    /* Fill the matrices with test data */	//Allocation for A
     for (i = 0; i < m; i++)
     {
 	 for(j = 0; j < n; j++)	
 	 {
-        	h_C[IDX2C(j,i,n)] = 0;		
+        	h_C[(i*n)+j] = 0;		
 	 }
     }
- 
 
 
   
 
     /**************************************Cuda Memcopies********************************/
 
+	//Try doing a normal memcopy, try with set matrix and get matrix 
+
      /* Initialize the device matrices with the host matrices */
     status = cublasSetVector(size_a, sizeof(h_A[0]), h_A, 1, d_A, 1);
+   // cublasSetVector(size_a, sizeof(h_A[0]), h_A_T, 1, d_A_T, 1);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -392,6 +438,7 @@ int main(int argc, char **argv)
 
 
     status = cublasSetVector(size_b, sizeof(h_B[0]), h_B, 1, d_B, 1);
+    //status = cublasSetVector(size_b, sizeof(h_B[0]), h_B_T, 1, d_B_T, 1);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -408,12 +455,34 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+/*
+    
+  /**************************************KERNEL Call to TRanspose*******************************************/
+
+
+/*	dim3 dimGrid(m/BLOCK_DIM+1, n/BLOCK_DIM+1, 1);
+	dim3 dimBlock(BLOCK_DIM, BLOCK_DIM, 1);
+
+	transpose<<< dimGrid, dimBlock >>>(d_A_T, d_A,k,m);
+
+	cudaThreadSynchronize();
+
+	dim3 dimGrid1(k/BLOCK_DIM+1, n/BLOCK_DIM+1, 1);
+	dim3 dimBlock1(BLOCK_DIM, BLOCK_DIM, 1);
+
+	transpose<<< dimGrid1, dimBlock1 >>>(d_B_T, d_B,n,k);
+
+	cudaThreadSynchronize();
+
+*/
+
+
 
 
     /********************************************Kernel Call to Cublas GEMM*************************/
 
     /* Performs operation using cublas */
-    status = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, d_A, lda, d_B, ldb, &beta, d_C, ldc);
+    status = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, d_A, m, d_B, k, &beta, d_C, m);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -429,29 +498,30 @@ int main(int argc, char **argv)
 
     //Kernel Call to the Custom Function
 
-  /*  const dim3 blocksize(32,16);
-    const dim3 gridsize(N/blocksize.y +1,N/blocksize.x+1);
-    custom_sgemm_tt<<<gridsize,blocksize>>>(0, 0, N, N, N, alpha, 
+    /*const dim3 blocksize(32,16);
+    const dim3 gridsize(m/blocksize.y +1,n/blocksize.x+1);
+    custom_sgemm_tt<<<gridsize,blocksize>>>(0, 0, m, k, n, alpha, 
         d_A, N,d_B,N, 
         beta,
         d_C, N);
   
-   cudaDeviceSynchronize();
+   cudaDeviceSynchronize();*/
 
-*/
 
 
    /*************************************Kernel Call to Global Mem Non TRanspose One GEMM *******************************/
 
-/*
- 	custom_sgemm_nn<<<gridsize,blocksize>>>(0, 0, N, N, N, alpha, 
+
+
+        
+ 	/*custom_sgemm_nn<<<gridsize,blocksize>>>(0, 0, N, N, N, alpha, 
         d_A, N,d_B,N, 
         beta,
         d_C, N);
   
-       cudaDeviceSynchronize();
+       cudaDeviceSynchronize();*/
 
-*/
+
 
 
    /*************************************Kernel Call to Shared Memory GEMM *******************************/
@@ -470,31 +540,17 @@ int main(int argc, char **argv)
 
 
 
-  /**************************************KERNEL Call to TRanspose*******************************************/
-
-
-	/*dim3 dimGrid(N/BLOCK_DIM+1, N/BLOCK_DIM+1, 1);
-	dim3 dimBlock(BLOCK_DIM, BLOCK_DIM, 1);
-
-	transpose<<< dimGrid, dimBlock >>>(d_C, d_A,columns,rows);
-
-
-
-	cudaThreadSynchronize();*/
-
-
-
 
    /***********************************GEMM Function Call***************************************************/
 
-        dim3 dimGrid(m/BLOCK_DIM+1, n/BLOCK_DIM+1, 1);
+      /*  dim3 dimGrid(m/BLOCK_DIM+1, n/BLOCK_DIM+1, 1);
 	dim3 dimBlock(BLOCK_DIM, BLOCK_DIM, 1);
 
 	gemm_kernel<<< dimGrid, dimBlock >>>(d_A, d_B,d_C,m,k,n,alpha,beta);
+        
 
 
-
-	cudaThreadSynchronize();
+	cudaThreadSynchronize();*/
     
 
 
@@ -505,6 +561,12 @@ int main(int argc, char **argv)
 																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																				
 
     /* Read the result back */
+
+    // cublasGetVector(size_a, sizeof(h_A[0]), d_A_T, 1, h_A_T, 1);
+    //cublasGetVector(size_b, sizeof(h_B[0]), d_B_T, 1, h_B_T, 1);
+
+   
+
     status = cublasGetVector(size_c, sizeof(h_C[0]), d_C, 1, h_C, 1);
 
 
@@ -514,6 +576,11 @@ int main(int argc, char **argv)
         fprintf(stderr, "!!!! device access error (read C)\n");
         return EXIT_FAILURE;
     }
+
+
+
+
+
 
 
     
@@ -551,13 +618,42 @@ int main(int argc, char **argv)
    printf("\n\n");
 
 
+  /* printf("The Transpose Matrix A is\n\n");
+
+   for(i=0;i<(size_a);i++)
+	{
+		if(count1==k){
+			printf("\n");
+			count1=0;
+			}
+		count1=count1+1;	
+		printf("%f ",h_A_T[i]);
+	}
+   printf("\n\n");
+	
+
+   printf("The Transpose Matrix B is\n");
+   for(i=0;i<(size_b);i++)
+	{
+		if(count2==n){
+			printf("\n");
+			count2=0;
+			}
+		count2=count2+1;	
+		printf("%f ",h_B_T[i]);
+	}   */
+
+   printf("\n\n");
+
+
+
 
 
 
    printf("The output elements are\n");
     for(i=0;i<(size_c);i++)
 	{
-		if(count==n){
+		if(count==m){
 			printf("\n");
 			count=0;
 			}
@@ -565,7 +661,7 @@ int main(int argc, char **argv)
 		printf("%f ",h_C[i]);
 	}
 
-
+  
 
 
 
@@ -638,5 +734,5 @@ int main(int argc, char **argv)
     {
         printf("simpleCUBLAS test failed.\n");
         exit(EXIT_FAILURE);
-    }*/
+    }*/  
 }
