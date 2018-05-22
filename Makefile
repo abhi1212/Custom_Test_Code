@@ -34,7 +34,7 @@
 ################################################################################
 
 # Location of the CUDA Toolkit
-CUDA_PATH       ?= /usr/local/cuda-8.0
+CUDA_PATH       ?= /usr/local/cuda-9.0
 
 ##############################
 # start deprecated interface #
@@ -195,7 +195,7 @@ $(foreach sm,$(SMS),$(eval GENCODE_FLAGS += -gencode arch=compute_$(sm),code=sm_
 
 ifeq ($(SMS),)
 # Generate PTX code from SM 20
-GENCODE_FLAGS += -gencode arch=compute_20,code=compute_20
+#GENCODE_FLAGS += -gencode arch=compute_20,code=compute_20
 endif
 
 # Generate PTX code from the highest SM architecture in $(SMS) to guarantee forward-compatibility

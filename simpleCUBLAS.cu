@@ -46,9 +46,9 @@ Steps to Consider--
 /* Includes, cuda */
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-#include <helper_cuda.h>
+//#include <helper_cuda.h>
 #include <stdio.h>
-#include "device_launch_parameters.h"
+//#include "device_launch_parameters.h"
 
 
 /* Matrix size */
@@ -260,19 +260,21 @@ int main(int argc, char **argv)
     float *h_B;			//Host Array  B
     float *h_B_T;		//Host Array  B Transpose
     float *h_C;			//Host Array  C
+    float *h_C_MM;
     float *h_C_ref;		//Host Referrence Array
     float *d_A = 0;		//Device Array A
     float *d_A_T = 0;		//Transpose Device Array
     float *d_B =  0;		//Device Array B
     float *d_B_T= 0;		//Transpose Device array B
     float *d_C = 0;		//Device Array C
+    float *d_C_MM=0;
     float alpha = 1.0f;		
     float beta = 1.0f;
     int j=0;
 
-    int m=5;
-    int k=2;
-    int n=4;
+    int m=4;
+    int k=3;
+    int n=2;
  
     int size_a=m*k;
     int size_b=k*n;
@@ -290,13 +292,13 @@ int main(int argc, char **argv)
     float ref_norm;
     float diff;
     cublasHandle_t handle;
-    int dev = findCudaDevice(argc, (const char **) argv);	//If GPU exist
+   /* int dev = findCudaDevice(argc, (const char **) argv);	//If GPU exist
 
 
     if (dev == -1)
     {
         return EXIT_FAILURE;
-    }
+    }*/
 
     /* Initialize CUBLAS */
     printf("simpleCUBLAS test running..\n");
@@ -337,8 +339,8 @@ int main(int argc, char **argv)
     }
 
     h_C = (float *)malloc(size_c * sizeof(h_C[0]));
-
-    if (h_C == 0)
+    h_C_MM = (float *)malloc(size_c * sizeof(h_C[0]));
+    if (h_C == 0 && h_C_MM == 0)
     {
         fprintf(stderr, "!!!! host memory allocation error (C)\n");
         return EXIT_FAILURE;
@@ -381,7 +383,12 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-   
+    if (cudaMalloc((void **)&d_C_MM, size_c * sizeof(d_C[0])) != cudaSuccess)
+    {
+        fprintf(stderr, "!!!! device memory allocation error (allocate C)\n");
+        return EXIT_FAILURE;
+    }
+
     
 
     /************************************Memory Allocation Done, Now Initialization ****************************/ 
@@ -415,7 +422,8 @@ int main(int argc, char **argv)
     {
 	 for(j = 0; j < n; j++)	
 	 {
-        	h_C[(i*n)+j] = 0;		
+        	h_C[(i*n)+j] = 0;
+		h_C_MM[(i*n)+j] = 0;		
 	 }
     }
 
@@ -448,6 +456,7 @@ int main(int argc, char **argv)
     }
 
     status = cublasSetVector(size_c, sizeof(h_C[0]), h_C, 1, d_C, 1);
+    status = cublasSetVector(size_c, sizeof(h_C[0]), h_C_MM, 1, d_C_MM, 1);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -498,14 +507,14 @@ int main(int argc, char **argv)
 
     //Kernel Call to the Custom Function
 
-    /*const dim3 blocksize(32,16);
+    const dim3 blocksize(32,16);
     const dim3 gridsize(m/blocksize.y +1,n/blocksize.x+1);
     custom_sgemm_tt<<<gridsize,blocksize>>>(0, 0, m, k, n, alpha, 
         d_A, N,d_B,N, 
         beta,
-        d_C, N);
+        d_C_MM, N);
   
-   cudaDeviceSynchronize();*/
+   cudaDeviceSynchronize();
 
 
 
@@ -568,6 +577,7 @@ int main(int argc, char **argv)
    
 
     status = cublasGetVector(size_c, sizeof(h_C[0]), d_C, 1, h_C, 1);
+    status = cublasGetVector(size_c, sizeof(h_C[0]), d_C_MM, 1, h_C_MM, 1);
 
 
 
@@ -591,8 +601,9 @@ int main(int argc, char **argv)
    int count1=0;
    int count2=0;
    int count=0;
+   int count3=0;
 
-   printf("The Input Matrix A is\n\n");
+  printf("The Input Matrix A is\n\n");
    for(i=0;i<(size_a);i++)
 	{
 		if(count1==k){
@@ -647,10 +658,7 @@ int main(int argc, char **argv)
 
 
 
-
-
-
-   printf("The output elements are\n");
+   printf("The output elements after Cublas GEMM are\n");
     for(i=0;i<(size_c);i++)
 	{
 		if(count==m){
@@ -661,7 +669,17 @@ int main(int argc, char **argv)
 		printf("%f ",h_C[i]);
 	}
 
-  
+   printf("\n\n");
+   printf("The output elements after Normal GEMM are\n");
+    for(i=0;i<(size_c);i++)
+	{
+		if(count3==n){
+			printf("\n");
+			count3=0;
+			}
+		count3=count3+1;	
+		printf("%f ",h_C_MM[i]);
+	}
 
 
 
