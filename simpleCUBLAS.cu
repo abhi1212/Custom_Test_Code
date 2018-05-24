@@ -52,7 +52,7 @@ Steps to Consider--
 
 
 /* Matrix size */
-#define N (500)
+//#define N (500)
 #define TILE_WIDTH 16
 const int TILE_DIM = 32;
 const int BLOCK_DIM = 16;
@@ -96,8 +96,9 @@ float *C_gpu, int ldc)
     int sum = 0;
 
 
-    if( col < m && row < n)   //Now as my Matrix is n*m 
+    if( col < n && row < m)   //Now as my Matrix is n*m col<m and row<n
     {
+        //printf("Row is %d and column is %d \n",row, col);
         for(int i = 0; i < k; i++) 
         {
             sum += A_gpu[row * k + i] * B_gpu[i * m + col];
@@ -128,6 +129,7 @@ float *C_gpu, int ldc)
     int sum = 0;
     if( col < n && row < m) 
     {
+	
         for(int i = 0; i < k; i++) 
         {
             sum += A_gpu[row * k + i] * B_gpu[i * n + col];
@@ -297,7 +299,6 @@ int main(int argc, char **argv)
     float *h_B_T;		//Host Array  B Transpose
     float *h_C;			//Host Array  C
     float *h_C_MM;
-    float *h_C_ref;		//Host Referrence Array
     float *d_A = 0;		//Device Array A
     float *d_A_T = 0;		//Transpose Device Array
     float *d_B =  0;		//Device Array B
@@ -308,9 +309,9 @@ int main(int argc, char **argv)
     float beta = 1.0f;
     int j=0;
 
-    int m=80;
-    int k=40;
-    int n=50;
+    int m=4;
+    int k=5;
+    int n=7;
  
     int size_a=m*k;
     int size_b=k*n;
@@ -436,7 +437,7 @@ int main(int argc, char **argv)
     {
 	 for(j = 0; j < k; j++)	
 	 {
-        	h_A[(i*k)+j] = (i*k)+j;	
+        	h_A[(i*k)+j] =(i*k)+j;	
 		h_A_T[(i*k)+j] = 0;
 	 }
     }
@@ -447,7 +448,7 @@ int main(int argc, char **argv)
     {
 	 for(j = 0; j < n; j++)	
 	 {	
-        	h_B[(i*n)+j] = (i*n)+j;	
+        	h_B[(i*n)+j] =(i*n)+j;	
 		h_B_T[(i*n)+j] = 0;		
 	 }
     }
@@ -536,7 +537,7 @@ int main(int argc, char **argv)
     }
 
     cudaDeviceSynchronize();
-
+   
 
     /****************************************Kernel Call to Global Mem GEMM Transpose One ***************************/
 
@@ -547,9 +548,9 @@ int main(int argc, char **argv)
    /* const dim3 blocksize(32,32);// Block of 32*32 threads
     const dim3 gridsize(n/blocksize.y +1,m/blocksize.x+1);//Number of blocks in each direction
     custom_sgemm_tt<<<gridsize,blocksize>>>(0, 0, m, k, n, alpha, 
-        d_A, N,d_B,N, 
+        d_A, lda,d_B,ldb, 
         beta,
-        d_C_MM, N);
+        d_C_MM, ldc);
   
    cudaDeviceSynchronize();
     */
@@ -561,14 +562,14 @@ int main(int argc, char **argv)
     //The threads launched should be enough to size m*n we need threads equal to m*n.+
 
     const dim3 blocksize(32,32);// Block of 32*32 threads
-    const dim3 gridsize(n/blocksize.y +1,m/blocksize.x+1);//Number of blocks in each direction. // Make sure what are these
+    const dim3 gridsize(100 ,100);//Number of blocks in each direction. // Make sure what are these?? n/blocksize.y +1,m/blocksize.x+1
     blas_sgemm<<<gridsize,blocksize>>>(0, 0, m, k, n, alpha, 
-        d_B, N,d_A,N, 
+        d_B, lda,d_A,ldb, 
         beta,
-        d_C_MM, N);
+        d_C_MM, ldc);
   
    cudaDeviceSynchronize();
-
+  
 
 
 
@@ -681,7 +682,7 @@ int main(int argc, char **argv)
 	}   
 
    printf("\n\n");
-
+*/
 
   /* printf("The Transpose Matrix A is\n\n");
 
@@ -708,11 +709,11 @@ int main(int argc, char **argv)
 		printf("%f ",h_B_T[i]);
 	}   */
 
-   /*printf("\n\n");
+   printf("\n\n");
 
 
 
-   printf("The output elements after Cublas GEMM are\n");
+   /*printf("The output elements after Cublas GEMM are\n");
     for(i=0;i<(size_c);i++)
 	{
 		if(count==m){
@@ -724,7 +725,7 @@ int main(int argc, char **argv)
 	}
 
    printf("\n\n");*/
-   printf("The output element difference after GEMM is\n");
+   printf("The output element after GEMM is\n");
     for(i=0;i<(size_c);i++)
 	{
 		if(count3==n){
@@ -732,10 +733,8 @@ int main(int argc, char **argv)
 			count3=0;
 			}
 		count3=count3+1;	
-		printf("%f ",h_C_MM[i]);
+		printf("%f ",h_C_MM[i]-h_C[i]);
 	}
-
-
 
 
     /* Check result against reference 
