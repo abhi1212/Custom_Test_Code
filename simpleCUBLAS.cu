@@ -69,7 +69,43 @@ float *C_gpu, int ldc);
 
 /**************************************************************************************************/
 
+/****************************************Sgemm Kernel*********************************/
 
+/* Consider the following scenario 
+  
+Matrix A   Matrix B   Matrix C
+m*k	   k*n	      m*n
+5*4	   4*3	      5*3
+
+Matrix A   Matrix B   Matrix C
+n*k	   k*m        n*m 
+3*4        4*5        3*5
+
+				*/
+
+
+__global__ void blas_sgemm(int TA, int TB, int m, int k, int n, float ALPHA, 
+float *A_gpu, int lda, 
+float *B_gpu, int ldb,
+float BETA,
+float *C_gpu, int ldc)
+{
+
+    int row = blockIdx.y * blockDim.y + threadIdx.y; //Row of output Matrix
+    int col = blockIdx.x * blockDim.x + threadIdx.x; //Column of Output Matrix
+    int sum = 0;
+
+
+    if( col < m && row < n)   //Now as my Matrix is n*m 
+    {
+        for(int i = 0; i < k; i++) 
+        {
+            sum += A_gpu[row * k + i] * B_gpu[i * m + col];
+        }
+        C_gpu[row * m + col] = sum;
+    }
+
+}
 
 
 
@@ -80,7 +116,7 @@ float *C_gpu, int ldc);
 
 
 
-__global__ void custom_sgemm_tt(int TA, int TB, int M, int n, int K, float ALPHA, 
+__global__ void custom_sgemm_tt(int TA, int TB, int m, int k, int n, float ALPHA, 
 float *A_gpu, int lda, 
 float *B_gpu, int ldb,
 float BETA,
@@ -90,13 +126,13 @@ float *C_gpu, int ldc)
     int row = blockIdx.y * blockDim.y + threadIdx.y; 
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     int sum = 0;
-    if( col < K && row < M) 
+    if( col < n && row < m) 
     {
-        for(int i = 0; i < n; i++) 
+        for(int i = 0; i < k; i++) 
         {
-            sum += A_gpu[row * n + i] * B_gpu[i * K + col];
+            sum += A_gpu[row * k + i] * B_gpu[i * n + col];
         }
-        C_gpu[row * K + col] = sum;
+        C_gpu[row * n + col] = sum;
     }
 
 }
@@ -272,9 +308,9 @@ int main(int argc, char **argv)
     float beta = 1.0f;
     int j=0;
 
-    int m=4;
-    int k=3;
-    int n=2;
+    int m=80;
+    int k=40;
+    int n=50;
  
     int size_a=m*k;
     int size_b=k*n;
@@ -506,15 +542,33 @@ int main(int argc, char **argv)
 
 
     //Kernel Call to the Custom Function
+    //The threads launched should be enough to size m*n we need threads equal to m*n.
 
-    const dim3 blocksize(32,16);
-    const dim3 gridsize(m/blocksize.y +1,n/blocksize.x+1);
+   /* const dim3 blocksize(32,32);// Block of 32*32 threads
+    const dim3 gridsize(n/blocksize.y +1,m/blocksize.x+1);//Number of blocks in each direction
     custom_sgemm_tt<<<gridsize,blocksize>>>(0, 0, m, k, n, alpha, 
         d_A, N,d_B,N, 
         beta,
         d_C_MM, N);
   
    cudaDeviceSynchronize();
+    */
+
+
+  /****************************************Kernel Call to Blas_sgemm ***************************/
+
+
+    //The threads launched should be enough to size m*n we need threads equal to m*n.+
+
+    const dim3 blocksize(32,32);// Block of 32*32 threads
+    const dim3 gridsize(n/blocksize.y +1,m/blocksize.x+1);//Number of blocks in each direction. // Make sure what are these
+    blas_sgemm<<<gridsize,blocksize>>>(0, 0, m, k, n, alpha, 
+        d_B, N,d_A,N, 
+        beta,
+        d_C_MM, N);
+  
+   cudaDeviceSynchronize();
+
 
 
 
@@ -603,7 +657,7 @@ int main(int argc, char **argv)
    int count=0;
    int count3=0;
 
-  printf("The Input Matrix A is\n\n");
+ /* printf("The Input Matrix A is\n\n");
    for(i=0;i<(size_a);i++)
 	{
 		if(count1==k){
@@ -654,7 +708,7 @@ int main(int argc, char **argv)
 		printf("%f ",h_B_T[i]);
 	}   */
 
-   printf("\n\n");
+   /*printf("\n\n");
 
 
 
@@ -669,8 +723,8 @@ int main(int argc, char **argv)
 		printf("%f ",h_C[i]);
 	}
 
-   printf("\n\n");
-   printf("The output elements after Normal GEMM are\n");
+   printf("\n\n");*/
+   printf("The output element difference after GEMM is\n");
     for(i=0;i<(size_c);i++)
 	{
 		if(count3==n){
