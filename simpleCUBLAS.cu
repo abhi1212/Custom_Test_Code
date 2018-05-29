@@ -52,7 +52,7 @@ Steps to Consider--
 
 
 /* Matrix size */
-//#define N (500)
+#define N (500)
 #define TILE_WIDTH 16
 const int TILE_DIM = 32;
 const int BLOCK_DIM = 16;
@@ -66,8 +66,30 @@ float *B_gpu, int ldb,
 float BETA,
 float *C_gpu, int ldc);
 
+//void gemm_nn(int M, int N, int K, float ALPHA, float *A, int lda,float *B, int ldb,float *C, int ldc);
+
 
 /**************************************************************************************************/
+
+//CPU code for GEMM
+
+/*void gemm_nn(int M, int N, int K, float ALPHA, 
+        float *A, int lda, 
+        float *B, int ldb,
+        float *C, int ldc)
+{
+    int i,j,k;
+    #pragma omp parallel for
+    for(i = 0; i < M; ++i){
+        for(k = 0; k < K; ++k){
+            register float A_PART = ALPHA*A[i*lda+k];
+            for(j = 0; j < N; ++j){
+                C[i*ldc+j] += A_PART*B[k*ldb+j];
+            }
+        }
+    }
+}
+*/
 
 /****************************************Sgemm Kernel*********************************/
 
@@ -96,9 +118,9 @@ float *C_gpu, int ldc)
     int sum = 0;
 
 
-    if( col < n && row < m)   //Now as my Matrix is n*m col<m and row<n
+    if( col < m && row < n)   //Now as my Matrix is n*m , //Seems good
     {
-        //printf("Row is %d and column is %d \n",row, col);
+	//printf("Row is %d and col is %d \n", row,col);
         for(int i = 0; i < k; i++) 
         {
             sum += A_gpu[row * k + i] * B_gpu[i * m + col];
@@ -129,9 +151,8 @@ float *C_gpu, int ldc)
     int sum = 0;
     if( col < n && row < m) 
     {
-	
         for(int i = 0; i < k; i++) 
-        {
+        {		//n*k                  k*m
             sum += A_gpu[row * k + i] * B_gpu[i * n + col];
         }
         C_gpu[row * n + col] = sum;
@@ -299,6 +320,7 @@ int main(int argc, char **argv)
     float *h_B_T;		//Host Array  B Transpose
     float *h_C;			//Host Array  C
     float *h_C_MM;
+    float *h_C_ref;		//Host Referrence Array
     float *d_A = 0;		//Device Array A
     float *d_A_T = 0;		//Transpose Device Array
     float *d_B =  0;		//Device Array B
@@ -309,13 +331,15 @@ int main(int argc, char **argv)
     float beta = 1.0f;
     int j=0;
 
-    int m=4;
-    int k=5;
-    int n=7;
+    int m=32;
+    int k=27;
+    int n=369664;
  
     int size_a=m*k;
     int size_b=k*n;
     int size_c=(m*n);
+    //printf("Size a is %d and size b %d is and size c is %d \n",size_a,size_b,size_c);  	//Sizes are correct
+
     //int n2 = rows * columns;		//Size of h_A. h_B, h_C
 
     //Considering the case when it is non transpose
@@ -437,7 +461,7 @@ int main(int argc, char **argv)
     {
 	 for(j = 0; j < k; j++)	
 	 {
-        	h_A[(i*k)+j] =(i*k)+j;	
+        	h_A[(i*k)+j] = ((i*k)+j);	
 		h_A_T[(i*k)+j] = 0;
 	 }
     }
@@ -448,7 +472,7 @@ int main(int argc, char **argv)
     {
 	 for(j = 0; j < n; j++)	
 	 {	
-        	h_B[(i*n)+j] =(i*n)+j;	
+        	h_B[(i*n)+j] = ((i*n)+j);	
 		h_B_T[(i*n)+j] = 0;		
 	 }
     }
@@ -537,7 +561,7 @@ int main(int argc, char **argv)
     }
 
     cudaDeviceSynchronize();
-   
+
 
     /****************************************Kernel Call to Global Mem GEMM Transpose One ***************************/
 
@@ -545,15 +569,15 @@ int main(int argc, char **argv)
     //Kernel Call to the Custom Function
     //The threads launched should be enough to size m*n we need threads equal to m*n.
 
-   /* const dim3 blocksize(32,32);// Block of 32*32 threads
+    const dim3 blocksize(32,32);// Block of 32*32 threads
     const dim3 gridsize(n/blocksize.y +1,m/blocksize.x+1);//Number of blocks in each direction
     custom_sgemm_tt<<<gridsize,blocksize>>>(0, 0, m, k, n, alpha, 
-        d_A, lda,d_B,ldb, 
+        d_A, N,d_B,N, 
         beta,
-        d_C_MM, ldc);
+        d_C_MM, N);
   
    cudaDeviceSynchronize();
-    */
+    
 
 
   /****************************************Kernel Call to Blas_sgemm ***************************/
@@ -561,15 +585,15 @@ int main(int argc, char **argv)
 
     //The threads launched should be enough to size m*n we need threads equal to m*n.+
 
-    const dim3 blocksize(32,32);// Block of 32*32 threads
-    const dim3 gridsize(100 ,100);//Number of blocks in each direction. // Make sure what are these?? n/blocksize.y +1,m/blocksize.x+1
+    /*const dim3 blocksize(32,32);// Block of 32*32 threads
+    const dim3 gridsize(n/blocksize.y +1,m/blocksize.x+1);//Number of blocks in each direction. // Make sure what are these //n/blocksize.y +1,m/blocksize.x+1
     blas_sgemm<<<gridsize,blocksize>>>(0, 0, m, k, n, alpha, 
-        d_B, lda,d_A,ldb, 
+        d_B, N,d_A,N, 
         beta,
-        d_C_MM, ldc);
+        d_C_MM, N);
   
    cudaDeviceSynchronize();
-  
+     */
 
 
 
@@ -682,7 +706,7 @@ int main(int argc, char **argv)
 	}   
 
    printf("\n\n");
-*/
+
 
   /* printf("The Transpose Matrix A is\n\n");
 
@@ -709,11 +733,11 @@ int main(int argc, char **argv)
 		printf("%f ",h_B_T[i]);
 	}   */
 
-   printf("\n\n");
+   /*printf("\n\n");
 
 
 
-   /*printf("The output elements after Cublas GEMM are\n");
+   printf("The output elements after Cublas GEMM are\n");
     for(i=0;i<(size_c);i++)
 	{
 		if(count==m){
@@ -725,16 +749,22 @@ int main(int argc, char **argv)
 	}
 
    printf("\n\n");*/
-   printf("The output element after GEMM is\n");
+   printf("The output element difference after GEMM is\n");
     for(i=0;i<(size_c);i++)
 	{
 		if(count3==n){
 			printf("\n");
 			count3=0;
 			}
+		/*if(h_C[i]==2147483648){
+			printf("The inex is %d\n",i);
+			break;
+		}*/
 		count3=count3+1;	
-		printf("%f ",h_C_MM[i]-h_C[i]);
+		printf("%f ",h_C_MM[i]);
 	}
+
+
 
 
     /* Check result against reference 
@@ -807,3 +837,4 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }*/  
 }
+
