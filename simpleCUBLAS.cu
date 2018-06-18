@@ -148,14 +148,14 @@ float *C_gpu, int ldc)
 
     int row = blockIdx.y * blockDim.y + threadIdx.y; 
     int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int sum = 0;
+    float sum = 0;
     if( col < n && row < m) 
     {
         for(int i = 0; i < k; i++) 
-        {		//n*k                  k*m
-            sum += A_gpu[row * k + i] * B_gpu[i * n + col];
+        {		//n*k                     k*m
+            sum += (ALPHA *A_gpu[row * k + i]) * B_gpu[i * n + col];
         }
-        C_gpu[row * n + col] = sum;
+        C_gpu[row * n + col]+= sum;
     }
 
 }
@@ -332,8 +332,8 @@ int main(int argc, char **argv)
     int j=0;
 
     int m=32;
-    int k=27;
-    int n=369664;
+    int k=64;
+    int n=96;
  
     int size_a=m*k;
     int size_b=k*n;
@@ -483,8 +483,8 @@ int main(int argc, char **argv)
     {
 	 for(j = 0; j < n; j++)	
 	 {
-        	h_C[(i*n)+j] = 0;
-		h_C_MM[(i*n)+j] = 0;		
+        	h_C[(i*n)+j] = 1;
+		h_C_MM[(i*n)+j] = 1;		
 	 }
     }
 
@@ -552,7 +552,11 @@ int main(int argc, char **argv)
     /********************************************Kernel Call to Cublas GEMM*************************/
 
     /* Performs operation using cublas */
-    status = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, d_A, m, d_B, k, &beta, d_C, m);
+    
+    /* status = cublasSgemm(handle, (CUBLAS_OP_N),(CUBLAS_OP_N), n, m, k, &alpha, d_B, n, d_A, k, &beta,d_C,n);
+*/
+
+    //status = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, d_A, m, d_B, k, &beta, d_C, m);
 
     if (status != CUBLAS_STATUS_SUCCESS)
     {
@@ -706,7 +710,7 @@ int main(int argc, char **argv)
 	}   
 
    printf("\n\n");
-
+*/
 
   /* printf("The Transpose Matrix A is\n\n");
 

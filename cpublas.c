@@ -126,9 +126,9 @@ int main()
 	float alpha = 1.0f;		
 	float beta = 1.0f;
 	int j=0;
-	int m=3;
-	int k=4;
-	int n=4;
+	int m=32;
+	int k=2700;
+	int n=36;
 	int i;
 
 	int size_a=m*k;
@@ -206,7 +206,7 @@ int main()
    int count=0;
    int count3=0;
 
-   printf("The Input Matrix A is\n\n");
+  /* printf("The Input Matrix A is\n\n");
    for(i=0;i<(size_a);i++)
 	{
 		if(count1==k){
@@ -229,7 +229,7 @@ int main()
 		printf("%f ",h_B[i]);
 	}   
 
-   printf("\n\n");
+   printf("\n\n");*/
 
     printf("The output elements after Cublas GEMM are\n");
     for(i=0;i<(size_c);i++)
